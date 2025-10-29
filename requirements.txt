@@ -1,0 +1,10 @@
+uvicorn
+langchain
+langchain-google-genai
+python-dotenv
+sentence-transformers
+langchain-pinecone
+pinecone-client
+tiktoken
+bs4
+fastapi
