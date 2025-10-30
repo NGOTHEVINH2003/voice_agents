@@ -1,5 +1,6 @@
 uvicorn
 langchain
+langchain-community
 langchain-google-genai
 python-dotenv
 sentence-transformers
@@ -8,4 +9,4 @@ pinecone-client
 tiktoken
 bs4
 fastapi
-faiss-gpu
+faiss-cpu
