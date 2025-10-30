@@ -8,4 +8,4 @@ pinecone-client
 tiktoken
 bs4
 fastapi
-faiss-gpu
+faiss-cpu
