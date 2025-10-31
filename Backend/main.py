@@ -1,13 +1,23 @@
 from fastapi import FastAPI
-from pydantic import BaseModel
-from Backend.rag.query import query_rag
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from Backend.api import ingest, chat, ws_voice
 
-app = FastAPI(title="Voice Assistant - RAG API")
+app = FastAPI(title="AI Business Assistant - Advanced RAG (FAISS)")
 
-class QueryRequest(BaseModel):
-    question: str
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins = ["*"],
+    allow_methods = ["*"],
+    allow_credentials = True,
+    allow_headers = ["*"],
+)
 
-@app.post("/query")
-async def query(req: QueryRequest):
-    result = query_rag(req.question)
-    return result
+app.include_router(ingest.router)
+app.include_router(chat.router)
+app.include_router(ws_voice.router)
+
+
+@app.get("/")
+def root():
+    return RedirectResponse(url="/docs")
