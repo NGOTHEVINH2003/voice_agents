@@ -2,7 +2,6 @@ from fastapi import APIRouter, UploadFile, File, Form
 from typing import List
 from Backend.rag.ingest import ingest_documents_from_paths
 from pathlib import Path
-import shutil
 
 router = APIRouter(prefix="/ingest", tags=["Ingest"])
 
