@@ -4,7 +4,7 @@ from langchain_community.embeddings import HuggingFaceBgeEmbeddings
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.vectorstores import FAISS
 from langchain.prompts import PromptTemplate
-from Backend.config import GOOGLE_API_TOKEN, PINECONE_INDEX_NAME
+from config import GOOGLE_API_TOKEN, PINECONE_INDEX_NAME
 
 index_path = "backend/data/processed/"
 

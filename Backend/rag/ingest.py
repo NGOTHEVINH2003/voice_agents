@@ -8,8 +8,6 @@ import torch
 import os
 
 
-
-
 HEADERS_TO_SPLIT_ON = [
     ("#", "Header1"),
     ("##", "Header2"),
