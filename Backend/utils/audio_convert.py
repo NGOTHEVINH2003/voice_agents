@@ -1,25 +1,32 @@
 import numpy as np
-import soundfile as sf
-from io import BytesIO
 
-def mulaw_to_wav(mulaw_bytes: bytes, sample_rate=16000):
+def mulaw_to_pcm16_numpy(mulaw_bytes: bytearray) -> np.ndarray:
     """
-    Chuyển Twilio μ-law (16kHz, 8-bit mono) → WAV PCM16 (BytesIO)
+    Converts 8-bit mulaw audio bytes to a 16-bit linear PCM numpy array.
+    This replaces the deprecated audioop.ulaw2lin(data, 2).
+    
+    Vectorized implementation for speed.
     """
-    if not mulaw_bytes:
-        raise ValueError("Empty μ-law input")
-
-    # Giải mã μ-law
-    mulaw = np.frombuffer(mulaw_bytes, dtype=np.uint8)
-    mulaw = ~mulaw
-    sign = ((mulaw & 0x80) >> 7)
-    exponent = (mulaw & 0x70) >> 4
-    mantissa = mulaw & 0x0F
-    magnitude = ((mantissa << 4) + 8) << exponent
-    pcm16 = ((magnitude - 132) * ((-1) ** sign)).astype(np.int16)
-
-    # Ghi WAV vào bộ nhớ
-    buf = BytesIO()
-    sf.write(buf, pcm16, sample_rate, format='WAV', subtype='PCM_16')
-    buf.seek(0)
-    return buf
+    # 1. Convert bytearray to numpy array of uint8
+    mulaw_array = np.frombuffer(mulaw_bytes, dtype=np.uint8)
+    
+    # 2. Mu-law to PCM16 conversion (G.711 standard)
+    BIAS = 0x84  # 132
+    
+    # Invert bits
+    t = ~mulaw_array & 0xFF
+    
+    # Extract sign, exponent, and mantissa
+    sign = (t & 0x80)
+    exponent = (t & 0x70) >> 4
+    mantissa = (t & 0x0F)
+    
+    # Calculate PCM magnitude
+    pcm_magnitude = ((mantissa << 3) + BIAS) << exponent
+    
+    # Apply bias and sign to get 16-bit PCM
+    # We use np.where for efficient conditional logic
+    pcm_array = np.where(sign == 0, pcm_magnitude - BIAS, BIAS - pcm_magnitude)
+    
+    # Return as int16 array
+    return pcm_array.astype(np.int16)
