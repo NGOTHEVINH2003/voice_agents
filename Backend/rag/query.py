@@ -4,13 +4,18 @@ from langchain_community.embeddings import HuggingFaceBgeEmbeddings
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.vectorstores import FAISS
 from langchain.prompts import PromptTemplate
-from config import GOOGLE_API_TOKEN, PINECONE_INDEX_NAME
+from Backend.config import settings
 
-index_path = "backend/data/processed/"
+index_path = settings.FAISS_INDEX_DIR
+EMBED_MODEL = settings.EMBEDDING_MODEL
+GOOGLE_API_TOKEN = settings.GOOGLE_API_KEY
+TOP_K = settings.TOP_K
+LLM_MODEL = settings.LLM_MODEL
+
 
 def get_rag_chain():
     embeddings = HuggingFaceBgeEmbeddings(
-        model_name="BAAI/bge-base-en-v1.5",
+        model_name= EMBED_MODEL,
         encode_kwargs={"normalize_embeddings": True}
     )
 
@@ -20,10 +25,10 @@ def get_rag_chain():
     # )
     vectorstore = FAISS.load_local(index_path,embeddings,allow_dangerous_deserialization=True)
 
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+    retriever = vectorstore.as_retriever(search_kwargs={"k": TOP_K})
 
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash-exp",
+        model= LLM_MODEL,
         google_api_key=GOOGLE_API_TOKEN,
         temperature=0.2
     )
@@ -49,12 +54,3 @@ def get_rag_chain():
     )
 
     return chain
-
-
-def query_rag(question: str):
-    chain = get_rag_chain()
-    result = chain.invoke({"query": question})
-    return {
-        "answer": result["result"],
-        "sources": [doc.metadata.get("source", "") for doc in result["source_documents"]]
-    }
