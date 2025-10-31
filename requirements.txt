@@ -10,3 +10,12 @@ tiktoken
 bs4
 fastapi
 faiss-cpu
+pypdf
+python-multipart
+tqdm
+rich
+aiohttp
+faster-whisper
+soundfile
+twilio
+websockets
