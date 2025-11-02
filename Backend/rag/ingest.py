@@ -7,7 +7,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS
 from Backend.utils.splitter import chunk_texts
 from Backend.config import settings
-from rich import print
+# from rich import print
 import pickle
 
 EMBED_MODEL = settings.EMBEDDING_MODEL

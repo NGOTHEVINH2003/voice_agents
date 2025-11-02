@@ -13,3 +13,8 @@ pypdf
 python-multipart
 faster-whisper
 websockets
+google-api-python-client 
+google-auth-httplib2 
+google-auth-oauthlib
+celery
+redis
