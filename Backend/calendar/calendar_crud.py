@@ -1,4 +1,4 @@
-from get_service import get_calendar_service
+from Backend.calendar.get_service import get_calendar_service
 
 service = get_calendar_service()
 
@@ -25,7 +25,7 @@ def delete_event(eventId: str):
     
 def update_event(eventId: str, template: dict):
     try:
-        response = service.events().insert(calendarId="primary", eventId=eventId, body=template).execute()
+        response = service.events().update(calendarId="primary", eventId=eventId, body=template).execute()
         return response
     except Exception as e:
         return str(e)
