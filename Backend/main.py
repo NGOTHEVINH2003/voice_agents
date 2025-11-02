@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
-from Backend.api import ingest, chat, voice
+from Backend.api import ingest, chat, voice, email
 
 app = FastAPI(title="AI Business Assistant - Advanced RAG (FAISS)")
 
@@ -25,6 +25,8 @@ app.include_router(ingest.router)
 app.include_router(chat.router)
 
 app.include_router(voice.router)
+
+app.include_router(email.router)
 
 @app.get("/")
 def root():
