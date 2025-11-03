@@ -1,5 +1,4 @@
 from langchain.chains.retrieval_qa.base import RetrievalQA
-from langchain_pinecone import PineconeVectorStore
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.vectorstores import FAISS
@@ -18,11 +17,6 @@ def get_rag_chain():
         model_name= EMBED_MODEL,
         encode_kwargs={"normalize_embeddings": True}
     )
-
-    # vectorstore = PineconeVectorStore.from_existing_index(
-    #     index_name=PINECONE_INDEX_NAME,
-    #     embedding=embeddings
-    # )
     vectorstore = FAISS.load_local(index_path,embeddings,allow_dangerous_deserialization=True)
 
     retriever = vectorstore.as_retriever(search_kwargs={"k": TOP_K})
