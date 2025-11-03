@@ -64,9 +64,7 @@ def parse_meeting_request(text: str):
     
     if not dt:
         print("Không thể phân tích thời gian từ câu. Dùng thời gian hiện tại (fallback).")
-        # Giữ nguyên logic fallback của bạn
         dt = datetime.now() 
-        # (Lưu ý: dt này không có múi giờ, có thể không đồng nhất với dt_obj)
 
     summary = extract_summary(text)
 

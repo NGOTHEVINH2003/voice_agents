@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice AI Agent</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+        h1 {
+            font-weight: 300;
+            color: #1c1e21;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem;
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+        #status {
+            font-size: 1rem;
+            color: #606770;
+            margin-bottom: 1.5rem;
+            min-height: 1.2em;
+            text-align: center;
+        }
+        button {
+            font-size: 1.1rem;
+            padding: 0.8rem 1.5rem;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        #startButton {
+            background-color: #1b74e4;
+            color: white;
+        }
+        #startButton:hover {
+            background-color: #186acb;
+        }
+        #stopButton {
+            background-color: #e41b1b;
+            color: white;
+            display: none; /* Hidden by default */
+        }
+        #stopButton:hover {
+            background-color: #cb1818;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Voice AI Agent</h1>
+        <div id="status">Click "Start" to talk</div>
+        <button id="startButton">Start</button>
+        <button id="stopButton">Stop</button>
+    </div>
+
+    <script>
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const statusDiv = document.getElementById('status');
+
+        let socket;
+        let audioContext;
+        let scriptProcessor;
+        let mediaStream;
+
+        // --- Audio Playback ---
+        let pcmAudioContext;
+        let audioQueue = [];
+        let nextPlayTime = 0;
+        let isPlaying = false;
+
+        function initPlaybackContext() {
+            if (!pcmAudioContext || pcmAudioContext.state === 'closed') {
+                pcmAudioContext = new (window.AudioContext || window.webkitAudioContext)({
+                    sampleRate: 16000
+                });
+                nextPlayTime = 0;
+                audioQueue = [];
+                isPlaying = false;
+            }
+        }
+
+        async function playAudioChunk(pcmInt16Data) {
+            if (!pcmAudioContext) return;
+
+            // 1. Convert Int16 to Float32
+            const float32Data = new Float32Array(pcmInt16Data.length);
+            for (let i = 0; i < pcmInt16Data.length; i++) {
+                float32Data[i] = pcmInt16Data[i] / 32767.0;
+            }
+
+            // 2. Create AudioBuffer
+            const audioBuffer = pcmAudioContext.createBuffer(1, float32Data.length, 16000);
+            audioBuffer.getChannelData(0).set(float32Data);
+
+            // 3. Queue and play
+            const source = pcmAudioContext.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(pcmAudioContext.destination);
+
+            const now = pcmAudioContext.currentTime;
+            if (nextPlayTime < now) {
+                nextPlayTime = now;
+            }
+
+            source.start(nextPlayTime);
+            nextPlayTime += audioBuffer.duration;
+        }
+
+
+        // --- WebSocket and Microphone ---
+        async function startStreaming() {
+            console.log("Starting stream...");
+            statusDiv.textContent = "Connecting to server...";
+            
+            // Determine WebSocket protocol
+            const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+            const wsUrl = `${wsProtocol}//${window.location.host}/agent/ws`;
+
+            socket = new WebSocket(wsUrl);
+
+            socket.onopen = () => {
+                console.log("WebSocket connected.");
+                statusDiv.textContent = "Connecting to microphone...";
+                initMicrophone();
+                initPlaybackContext(); // Init playback context on successful connection
+            };
+
+            socket.onmessage = async (event) => {
+                // This is streaming PCM audio from the server
+                if (event.data instanceof Blob) {
+                    const arrayBuffer = await event.data.arrayBuffer();
+                    const pcmData = new Int16Array(arrayBuffer);
+                    playAudioChunk(pcmData);
+                }
+            };
+
+            socket.onerror = (error) => {
+                console.error("WebSocket Error:", error);
+                statusDiv.textContent = "Error connecting. Please refresh.";
+            };
+
+            socket.onclose = () => {
+                console.log("WebSocket disconnected.");
+                if (statusDiv.textContent !== "Stopped.") {
+                    statusDiv.textContent = "Connection lost. Please refresh.";
+                }
+                stopStreaming();
+            };
+        }
+
+        async function initMicrophone() {
+            try {
+                // Request 16kHz mono audio
+                audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                    sampleRate: 16000
+                });
+
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    audio: { 
+                        sampleRate: 16000, 
+                        channelCount: 1,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+                
+                statusDiv.textContent = "Listening... speak now.";
+                startButton.style.display = 'none';
+                stopButton.style.display = 'block';
+
+                const source = audioContext.createMediaStreamSource(mediaStream);
+                
+                // Use a ScriptProcessorNode to get raw PCM data.
+                // Buffer size 4096 = 256ms at 16kHz
+                scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+                
+                scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
+                    if (socket && socket.readyState === WebSocket.OPEN) {
+                        const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
+                        
+                        // Convert Float32 to Int16
+                        const pcmData = new Int16Array(inputData.length);
+                        for (let i = 0; i < inputData.length; i++) {
+                            pcmData[i] = Math.floor(inputData[i] * 32767);
+                        }
+                        
+                        // Send the raw Int16 bytes
+                        socket.send(pcmData.buffer);
+                    }
+                };
+
+                source.connect(scriptProcessor);
+                scriptProcessor.connect(audioContext.destination);
+
+            } catch (err) {
+                console.error("Error initializing microphone:", err);
+                statusDiv.textContent = "Error: Microphone access denied.";
+                stopStreaming();
+            }
+        }
+
+        function stopStreaming() {
+            console.log("Stopping stream...");
+
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+                mediaStream = null;
+            }
+            if (scriptProcessor) {
+                scriptProcessor.disconnect();
+                scriptProcessor = null;
+            }
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+            if (socket) {
+                socket.close();
+                socket = null;
+            }
+            if (pcmAudioContext) {
+                pcmAudioContext.close();
+                pcmAudioContext = null;
+            }
+
+            startButton.style.display = 'block';
+            stopButton.style.display = 'none';
+        }
+
+        startButton.addEventListener('click', () => {
+            startStreaming();
+        });
+
+        stopButton.addEventListener('click', () => {
+            statusDiv.textContent = "Stopped.";
+            stopStreaming();
+        });
+
+    </script>
+</body>
+</html>

@@ -2,12 +2,11 @@ import os
 from pathlib import Path
 from typing import List, Dict
 from langchain.docstore.document import Document
-from langchain.document_loaders import TextLoader, PyPDFLoader, UnstructuredHTMLLoader
+from langchain_community.document_loaders import TextLoader, PyPDFLoader, UnstructuredHTMLLoader
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS
 from Backend.utils.splitter import chunk_texts
 from Backend.config import settings
-# from rich import print
 import pickle
 
 EMBED_MODEL = settings.EMBEDDING_MODEL
@@ -24,10 +23,9 @@ def load_file_to_texts(path: Path) -> List[Dict]:
     elif ext in [".html", ".htm"]:
         loader = UnstructuredHTMLLoader(str(path))
     else:
-        # fallback to text loader
         loader = TextLoader(str(path), encoding="utf-8")
     docs = loader.load()
-    # docs are LangChain Document objects
+
     return docs
 
 def ingest_documents_from_paths(paths: List[str], namespace: str = "default"):
@@ -39,10 +37,8 @@ def ingest_documents_from_paths(paths: List[str], namespace: str = "default"):
     for p in paths:
         docs = load_file_to_texts(Path(p))
         for d in docs:
-            # preserve metadata like source
             all_docs.append(Document(page_content=d.page_content, metadata={"source": str(p), **(d.metadata or {})}))
 
-    # chunk content
     chunked_docs = []
     for d in all_docs:
         chunks = chunk_texts([d.page_content])
@@ -51,8 +47,7 @@ def ingest_documents_from_paths(paths: List[str], namespace: str = "default"):
             md.update({"chunk": i})
             chunked_docs.append(Document(page_content=c, metadata=md))
 
-    # create embeddings and FAISS index (or load existing and add)
-    embedder = HuggingFaceEmbeddings(model_name=EMBED_MODEL)  # may require HF token/config
+    embedder = HuggingFaceEmbeddings(model_name=EMBED_MODEL)
     index_path = INDEX_DIR / f"{namespace}_faiss"
     index_path.mkdir(parents=True, exist_ok=True)
 
