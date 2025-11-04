@@ -33,6 +33,10 @@ class Settings():
     WHISPER_MODEL = "base"
     WHISPER_DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     WHISPER_COMPUTE_TYPE = "int8"
+    #GOOGLE CALENDAR CONFIG
+    GOOGLE_CREDENTIAL = os.getenv("GOOGLE_SERVICE_ACCOUNT_KEY_PATH", "service_account.json")
+    CALENDAR_ID: str = os.getenv("CALENDAR_ID", "")
+
 
 
 
