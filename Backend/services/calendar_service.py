@@ -121,7 +121,7 @@ def get_calendar_tools(service_instance: GoogleCalendarService) -> List[tool]:
     @tool
     def list_calendar_events(start_time_iso: str, end_time_iso: str) -> str:
         """
-        Lists all calendar events between a specific start and end time.
+        Lists all calendar events between a specific start and end time. if time is not specify automatically understand it from  0 am - 12pm
         Use this to check for existing meetings or find free time.
         Args:
             start_time_iso (str): The start time in ISO 8601 format (e.g., '2025-11-05T10:00:00+07:00').
@@ -146,8 +146,17 @@ def get_calendar_tools(service_instance: GoogleCalendarService) -> List[tool]:
     def update_calendar_event(event_id: str, new_summary: Optional[str] = None, new_start_time_iso: Optional[str] = None, new_end_time_iso: Optional[str] = None) -> str:
         """
         Updates an existing calendar event. Use this to reschedule, rename, or change the duration of a meeting.
-        You MUST provide the 'event_id' of the event you want to update.
+       IMPORTANT: The user will NOT provide the 'event_id'. They will describe the event (e.g., "reschedule my 3 PM meeting tomorrow to 4 PM").
+        
+        Your workflow MUST be:
+        1. Use 'list_calendar_events' with the timeframe the user provided (e.g., 'tomorrow 3 PM') to FIND the event.
+        2. Get the 'event_id' from the search results.
+        3. Call this 'update_calendar_event' tool with the 'event_id' you found and the new details (e.g., 'new_start_time_iso'='2025-11-05T16:00:00+07:00').
+        
+        Error Handling: If you find more than 1 matching event, you MUST ASK the user for clarification before updating.
+
         Only provide the other fields (summary, start, end) if you want to change them.
+
         Args:
             event_id (str): The unique ID of the event to update. You must find this using 'list_calendar_events' first.
             new_summary (str, optional): The new title for the event.
@@ -160,7 +169,16 @@ def get_calendar_tools(service_instance: GoogleCalendarService) -> List[tool]:
     def delete_calendar_event(event_id: str) -> str:
         """
         Deletes an event from the calendar. Use this to cancel a meeting.
-        You MUST provide the 'event_id' of the event to delete.
+
+       IMPORTANT: The user will NOT provide the 'event_id'. They will describe the event (e.g., "cancel my 10 AM meeting today").
+        
+        Your workflow MUST be:
+        1. Use 'list_calendar_events' with the timeframe the user provided to FIND the event.
+        2. Get the 'event_id' from the search results.
+        3. Call this 'delete_calendar_event' tool with the 'event_id' you found.
+        
+        Error Handling: If you find more than 1 matching event, you MUST ASK the user for clarification before deleting.
+        
         Args:
             event_id (str): The unique ID of the event to delete. You must find this using 'list_calendar_events' first.
         """

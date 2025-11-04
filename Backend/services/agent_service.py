@@ -187,13 +187,11 @@ Your goal is to be a smart, accurate scheduling assistant who never hallucinates
         """
         print(f"Agent processing text for session {session_id}: '{text}'")
         
-        # Thêm timestamp vào input để đảm bảo LLM luôn có context về thời gian
         current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S %A")
         
         try:
             config = {"configurable": {"session_id": session_id}}
             
-            # Thêm context thời gian vào input
             enhanced_input = f"[System Context: Current DateTime is {current_datetime}]\n{text}"
             
             response = await self.chain_with_history.ainvoke(
