@@ -55,9 +55,12 @@ def ingest_documents_from_paths(paths: List[str], namespace: str = "default"):
         print("[yellow]Loading existing FAISS and adding documents...[/yellow]")
         vectordb = FAISS.load_local(str(index_path), embedder)
         vectordb.add_documents(chunked_docs)
+        vectordb.save_local(str(index_path))
     else:
         print("[green]Creating new FAISS index...[/green]")
-        vectordb = FAISS.from_documents(chunked_docs, embedder, index_path=str(index_path))
+        vectordb = FAISS.from_documents(chunked_docs, embedder)
+        vectordb.save_local(str(index_path))  # lưu index
+
 
     # Also persist metadata mapping if needed (FAISS wrapper handles metadata in LangChain)
     print(f"[green]Ingested {len(chunked_docs)} chunks into FAISS at {index_path}[/green]")
