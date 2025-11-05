@@ -2,7 +2,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
-
+from Backend.services.supabase_service import SupabaseService
 try:
     from Backend.api import ingest, chat, email, drive
 except ImportError:
@@ -79,6 +79,13 @@ app.include_router(drive.router, prefix="/api", tags=["RAG Drive"])
 def root():
     """Chuyển hướng đến trang tài liệu API."""
     return RedirectResponse(url="/docs")
+
+try:
+    supabase_service = SupabaseService()
+    print("✅ Supabase CRM Database initialized.")
+except Exception as e:
+    supabase_service = None
+    print(f"❌ Lỗi khi khởi tạo Supabase CRM DB: {e}")
 
 
 # --- Main Entry Point ---
