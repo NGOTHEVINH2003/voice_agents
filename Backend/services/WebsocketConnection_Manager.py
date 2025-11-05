@@ -1,5 +1,6 @@
 import asyncio
 import uuid
+import json  # --- THAY ĐỔI: Thêm import này ---
 from fastapi import WebSocket, WebSocketDisconnect
 from Backend.config import settings 
 from Backend.services.audio_processing_service import AudioProcessingSerivce
@@ -38,18 +39,47 @@ class WebSocketManager:
         
         try:
             while True:
-                data = await self.websocket.receive_bytes()
-                await self.process_audio_chunk(data)
+                message = await self.websocket.receive()
+                
+                if message["type"] == "websocket.receive":
+                    if "bytes" in message and message["bytes"] is not None:
+                        await self.process_audio_chunk(message["bytes"])
+                    
+                    elif "text" in message and message["text"] is not None:
+                        await self.handle_command(message["text"])
                 
         except WebSocketDisconnect:
             print(f"WebSocket client disconnected: {self.session_id}")
         except Exception as e:
             print(f"An error occurred in WebSocketManager: {e}")
         finally:
-            # Cleanup
             if self.websocket.client_state.name == "CONNECTED":
                 await self.websocket.close()
             print(f"Connection closed for session: {self.session_id}")
+
+    async def handle_command(self, command_text: str):
+        """Handles incoming text-based commands (like end_speech)."""
+        try:
+            command_data = json.loads(command_text)
+            event = command_data.get("event")
+
+            if event == "end_speech":
+                print("Client manually triggered 'end_speech'.")
+                
+                if self.is_speaking:
+                    await self.process_end_of_speech()
+                    
+                    self.is_speaking = False
+                    self.silence_chunks = 0
+                    self.vad_buffer = bytearray()
+                else:
+                    print("Client triggered 'end_speech' but VAD was not active. Ignoring.")
+
+        except json.JSONDecodeError:
+            print(f"Received non-JSON text message, ignoring: {command_text}")
+        except Exception as e:
+            print(f"Error handling command: {e}")
+
 
     async def process_audio_chunk(self, data: bytes):
         """Processes a raw audio chunk from the client."""
@@ -71,7 +101,7 @@ class WebSocketManager:
                 self.silence_chunks += 1
                 
                 if self.silence_chunks > self.max_silence_chunks:
-                    print("End of speech detected.")
+                    print("End of speech detected (by VAD).")
                     await self.process_end_of_speech()
                     self.is_speaking = False
                     self.silence_chunks = 0
@@ -80,7 +110,7 @@ class WebSocketManager:
 
     async def process_end_of_speech(self):
         """
-        Called when end-of-speech is detected.
+        Called when end-of-speech is detected (either by VAD or manual stop).
         Transcribes the buffer, gets an agent response, and streams TTS.
         """
         if len(self.speech_buffer) < self.min_speech_bytes:
@@ -90,7 +120,6 @@ class WebSocketManager:
 
         print(f"Processing audio buffer of size: {len(self.speech_buffer)}")
         
-
         buffer_to_process = self.speech_buffer
         self.speech_buffer = bytearray()
         

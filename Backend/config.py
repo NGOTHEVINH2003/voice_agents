@@ -9,7 +9,7 @@ load_dotenv()
 class Settings():
     #RAG CONFIG
     GOOGLE_API_KEY = os.getenv("GOOGLE_API_TOKEN")
-    LLM_MODEL = os.getenv("LLM_MODEL", "gemini-2.0-flash-exp")
+    LLM_MODEL = os.getenv("LLM_MODEL", "gemini-2.5-flash")
     EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-base-en-v1.5")
     FAISS_INDEX_DIR = Path(os.getenv("FAISS_INDEX_DIR", "Backend/data/processed/"))
     CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", 1000))
@@ -33,6 +33,10 @@ class Settings():
     WHISPER_MODEL = "base"
     WHISPER_DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     WHISPER_COMPUTE_TYPE = "int8"
+    #GOOGLE CALENDAR CONFIG
+    GOOGLE_CREDENTIAL = os.getenv("GOOGLE_SERVICE_ACCOUNT_KEY_PATH", "service_account.json")
+    CALENDAR_ID: str = os.getenv("CALENDAR_ID", "")
+
 
 
 

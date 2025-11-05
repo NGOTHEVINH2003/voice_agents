@@ -16,6 +16,8 @@ from Backend.services.audio_processing_service import AudioProcessingSerivce
 from Backend.services.whisper_service import Whisper_Service
 from Backend.services.tts_service import TTSService
 from Backend.services.agent_service import LangChainAgent
+from Backend.services.calendar_service import GoogleCalendarService
+
 from Backend.api.voice import create_voice_agent_router
 
 app = FastAPI(title="AI Business Assistant - Advanced RAG (FAISS)")
@@ -43,7 +45,12 @@ try:
         compute_type=settings.WHISPER_COMPUTE_TYPE
     )
     tts_service = TTSService(api_key=settings.ELEVEN_API_KEY)
-    agent_service = LangChainAgent(google_api_key=settings.GOOGLE_API_KEY)
+    calendar_service = GoogleCalendarService(
+        service_account_file=settings.GOOGLE_CREDENTIAL,
+        calendar_id=settings.CALENDAR_ID
+    )
+
+    agent_service = LangChainAgent(google_api_key=settings.GOOGLE_API_KEY, calendar_service= calendar_service)
     print("All services initialized.")
 
     voice_router = create_voice_agent_router(

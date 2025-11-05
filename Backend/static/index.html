@@ -36,6 +36,10 @@
             min-height: 1.2em;
             text-align: center;
         }
+        .button-container {
+            display: flex;
+            gap: 10px; /* Khoảng cách giữa các nút */
+        }
         button {
             font-size: 1.1rem;
             padding: 0.8rem 1.5rem;
@@ -47,6 +51,12 @@
         button:active {
             transform: scale(0.98);
         }
+        button:disabled {
+            background-color: #ccd0d5;
+            cursor: not-allowed;
+        }
+
+        /* Nút Start */
         #startButton {
             background-color: #1b74e4;
             color: white;
@@ -54,12 +64,24 @@
         #startButton:hover {
             background-color: #186acb;
         }
-        #stopButton {
+
+        /* Nút Mute/Unmute (MỚI) */
+        #toggleMuteButton {
+            background-color: #d9534f; /* Màu đỏ cho "Mute" */
+            color: white;
+            display: none; /* Ẩn ban đầu */
+        }
+        #toggleMuteButton:hover {
+            background-color: #c9302c;
+        }
+
+        /* Nút End (Ngắt kết nối) */
+        #endButton {
             background-color: #e41b1b;
             color: white;
-            display: none; /* Hidden by default */
+            display: none; /* Ẩn ban đầu */
         }
-        #stopButton:hover {
+        #endButton:hover {
             background-color: #cb1818;
         }
     </style>
@@ -68,13 +90,17 @@
     <div class="container">
         <h1>Voice AI Agent</h1>
         <div id="status">Click "Start" to talk</div>
-        <button id="startButton">Start</button>
-        <button id="stopButton">Stop</button>
+        <div class="button-container">
+            <button id="startButton">Start</button>
+            <button id="toggleMuteButton">Mute</button>
+            <button id="endButton">End</button>
+        </div>
     </div>
 
     <script>
         const startButton = document.getElementById('startButton');
-        const stopButton = document.getElementById('stopButton');
+        const toggleMuteButton = document.getElementById('toggleMuteButton'); // ĐỔI TÊN
+        const endButton = document.getElementById('endButton');
         const statusDiv = document.getElementById('status');
 
         let socket;
@@ -82,12 +108,15 @@
         let scriptProcessor;
         let mediaStream;
 
-        // --- Audio Playback ---
         let pcmAudioContext;
         let audioQueue = [];
         let nextPlayTime = 0;
         let isPlaying = false;
+        
+        let isStoppingCleanly = false; 
+        let isMuted = false; // BIẾN TRẠNG THÁI MUTE MỚI
 
+        // --- Audio Playback ---
         function initPlaybackContext() {
             if (!pcmAudioContext || pcmAudioContext.state === 'closed') {
                 pcmAudioContext = new (window.AudioContext || window.webkitAudioContext)({
@@ -101,38 +130,32 @@
 
         async function playAudioChunk(pcmInt16Data) {
             if (!pcmAudioContext) return;
-
-            // 1. Convert Int16 to Float32
             const float32Data = new Float32Array(pcmInt16Data.length);
             for (let i = 0; i < pcmInt16Data.length; i++) {
                 float32Data[i] = pcmInt16Data[i] / 32767.0;
             }
-
-            // 2. Create AudioBuffer
             const audioBuffer = pcmAudioContext.createBuffer(1, float32Data.length, 16000);
             audioBuffer.getChannelData(0).set(float32Data);
-
-            // 3. Queue and play
             const source = pcmAudioContext.createBufferSource();
             source.buffer = audioBuffer;
             source.connect(pcmAudioContext.destination);
-
             const now = pcmAudioContext.currentTime;
             if (nextPlayTime < now) {
                 nextPlayTime = now;
             }
-
             source.start(nextPlayTime);
             nextPlayTime += audioBuffer.duration;
         }
 
-
         // --- WebSocket and Microphone ---
+
+        // Nút START: Bắt đầu toàn bộ
         async function startStreaming() {
             console.log("Starting stream...");
+            startButton.disabled = true;
             statusDiv.textContent = "Connecting to server...";
+            isStoppingCleanly = false;
             
-            // Determine WebSocket protocol
             const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
             const wsUrl = `${wsProtocol}//${window.location.host}/agent/ws`;
 
@@ -142,11 +165,10 @@
                 console.log("WebSocket connected.");
                 statusDiv.textContent = "Connecting to microphone...";
                 initMicrophone();
-                initPlaybackContext(); // Init playback context on successful connection
+                initPlaybackContext();
             };
 
             socket.onmessage = async (event) => {
-                // This is streaming PCM audio from the server
                 if (event.data instanceof Blob) {
                     const arrayBuffer = await event.data.arrayBuffer();
                     const pcmData = new Int16Array(arrayBuffer);
@@ -157,20 +179,20 @@
             socket.onerror = (error) => {
                 console.error("WebSocket Error:", error);
                 statusDiv.textContent = "Error connecting. Please refresh.";
+                cleanupConnection(); 
             };
 
             socket.onclose = () => {
                 console.log("WebSocket disconnected.");
-                if (statusDiv.textContent !== "Stopped.") {
+                if (!isStoppingCleanly) {
                     statusDiv.textContent = "Connection lost. Please refresh.";
                 }
-                stopStreaming();
+                cleanupConnection(); 
             };
         }
 
         async function initMicrophone() {
             try {
-                // Request 16kHz mono audio
                 audioContext = new (window.AudioContext || window.webkitAudioContext)({
                     sampleRate: 16000
                 });
@@ -185,26 +207,30 @@
                 });
                 
                 statusDiv.textContent = "Listening... speak now.";
+                isMuted = false; // Bắt đầu ở trạng thái không Mute
+                
+                // THAY ĐỔI UI: Ẩn Start, Hiện Mute và End
                 startButton.style.display = 'none';
-                stopButton.style.display = 'block';
+                toggleMuteButton.style.display = 'block';
+                toggleMuteButton.textContent = 'Mute'; // Đặt text ban đầu
+                toggleMuteButton.style.backgroundColor = '#d9534f'; // Màu đỏ
+                endButton.style.display = 'block';
 
                 const source = audioContext.createMediaStreamSource(mediaStream);
-                
-                // Use a ScriptProcessorNode to get raw PCM data.
-                // Buffer size 4096 = 256ms at 16kHz
                 scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
                 
                 scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
+                    // LOGIC MUTE MỚI: Chỉ gửi audio nếu không bị Mute
+                    if (isMuted) {
+                        return; // Không làm gì cả nếu đang Mute
+                    }
+                    
                     if (socket && socket.readyState === WebSocket.OPEN) {
                         const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
-                        
-                        // Convert Float32 to Int16
                         const pcmData = new Int16Array(inputData.length);
                         for (let i = 0; i < inputData.length; i++) {
                             pcmData[i] = Math.floor(inputData[i] * 32767);
                         }
-                        
-                        // Send the raw Int16 bytes
                         socket.send(pcmData.buffer);
                     }
                 };
@@ -215,13 +241,42 @@
             } catch (err) {
                 console.error("Error initializing microphone:", err);
                 statusDiv.textContent = "Error: Microphone access denied.";
-                stopStreaming();
+                cleanupConnection(); 
             }
         }
 
-        function stopStreaming() {
-            console.log("Stopping stream...");
+        // HÀM MỚI: Bật/Tắt Mute
+        function toggleMute() {
+            isMuted = !isMuted; // Đảo ngược trạng thái
+            
+            if (isMuted) {
+                toggleMuteButton.textContent = 'Unmute';
+                toggleMuteButton.style.backgroundColor = '#f0ad4e'; // Màu cam
+                statusDiv.textContent = 'Muted. Click "Unmute" to talk.';
+                console.log("Mic muted.");
+            } else {
+                toggleMuteButton.textContent = 'Mute';
+                toggleMuteButton.style.backgroundColor = '#d9534f'; // Màu đỏ
+                statusDiv.textContent = 'Listening... speak now.';
+                console.log("Mic unmuted.");
+            }
+        }
 
+        // Nút END: Ngắt kết nối WebSocket ngay lập tức
+        function stopStreaming() {
+            console.log("Ending connection (hard stop)...");
+            isStoppingCleanly = true; // Đánh dấu là chúng ta chủ động dừng
+            
+            if (socket) {
+                socket.close();
+            }
+        }
+        
+        // HÀM DỌN DẸP CUỐI CÙNG
+        function cleanupConnection() {
+            console.log("Cleaning up resources...");
+
+            // Đảm bảo micrô đã dừng
             if (mediaStream) {
                 mediaStream.getTracks().forEach(track => track.stop());
                 mediaStream = null;
@@ -231,30 +286,37 @@
                 scriptProcessor = null;
             }
             if (audioContext) {
-                audioContext.close();
+                audioContext.close().catch(e => {});
                 audioContext = null;
             }
-            if (socket) {
-                socket.close();
-                socket = null;
-            }
+            
+            // Đóng context phát lại
             if (pcmAudioContext) {
-                pcmAudioContext.close();
+                pcmAudioContext.close().catch(e => console.error("Error closing playback context:", e));
                 pcmAudioContext = null;
             }
 
+            socket = null;
+
+            // Reset UI về trạng thái ban đầu
             startButton.style.display = 'block';
-            stopButton.style.display = 'none';
+            startButton.disabled = false;
+            toggleMuteButton.style.display = 'none'; // Ẩn nút Mute
+            endButton.style.display = 'none';
+            
+            isMuted = false; // Reset trạng thái Mute
+
+            if (!isStoppingCleanly && statusDiv.textContent.startsWith("Connection lost")) {
+                 // Giữ nguyên thông báo lỗi
+            } else {
+                 statusDiv.textContent = "Click 'Start' to talk";
+            }
         }
 
-        startButton.addEventListener('click', () => {
-            startStreaming();
-        });
-
-        stopButton.addEventListener('click', () => {
-            statusDiv.textContent = "Stopped.";
-            stopStreaming();
-        });
+        // Gán sự kiện cho 3 nút
+        startButton.addEventListener('click', startStreaming);
+        toggleMuteButton.addEventListener('click', toggleMute); // THAY ĐỔI
+        endButton.addEventListener('click', stopStreaming);
 
     </script>
 </body>
