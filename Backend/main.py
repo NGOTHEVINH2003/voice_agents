@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 try:
-    from Backend.api import ingest, chat, email
+    from Backend.api import ingest, chat, email, drive
 except ImportError:
     print("CẢNH BÁO: Không thể import 'Backend.api'.")
     from fastapi import APIRouter
@@ -72,6 +72,7 @@ except Exception as e:
 app.include_router(ingest.router, prefix="/api", tags=["RAG Ingest"])
 app.include_router(chat.router, prefix="/api", tags=["RAG Chat"])
 app.include_router(email.router, prefix="/api", tags=["RAG Email"])
+app.include_router(drive.router, prefix="/api", tags=["RAG Drive"])
 
 
 @app.get("/")
