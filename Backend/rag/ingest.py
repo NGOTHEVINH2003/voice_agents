@@ -28,7 +28,7 @@ def load_file_to_texts(path: Path) -> List[Dict]:
 
     return docs
 
-def ingest_documents_from_paths(paths: List[str], namespace: str = "default"):
+def ingest_documents_from_paths(paths: List[str], namespace: str = ""):
     """
     paths: list of file paths (local)
     namespace: optional label (used if storing multiple indexes)
@@ -48,7 +48,7 @@ def ingest_documents_from_paths(paths: List[str], namespace: str = "default"):
             chunked_docs.append(Document(page_content=c, metadata=md))
 
     embedder = HuggingFaceEmbeddings(model_name=EMBED_MODEL)
-    index_path = INDEX_DIR / f"{namespace}_faiss"
+    index_path = INDEX_DIR / f"{namespace}"
     index_path.mkdir(parents=True, exist_ok=True)
 
     if (index_path / "index.faiss").exists():
