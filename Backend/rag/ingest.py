@@ -11,7 +11,6 @@ from Backend.config import settings
 EMBED_MODEL = settings.EMBEDDING_MODEL
 INDEX_DIR = Path(settings.FAISS_INDEX_DIR)
 
-# Helper: load a file and return list[Document]
 def load_file_to_texts(path: Path) -> List[Document]:
     path = Path(path)
     ext = path.suffix.lower()
@@ -60,13 +59,10 @@ def ingest_documents_from_paths(paths: List[str]):
 
     print(f"Total chunks: {len(chunked_docs)}")
 
-    # Tạo embeddings
     embedder = HuggingFaceEmbeddings(model_name=EMBED_MODEL)
     
-    # Tạo thư mục nếu chưa có
     INDEX_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Kiểm tra nếu đã có index cũ
     if (INDEX_DIR / "index.faiss").exists():
         print("Loading existing FAISS index and adding new documents...")
         vectordb = FAISS.load_local(
