@@ -7,13 +7,12 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from Backend.utils.splitter import chunk_texts
 from Backend.config import settings
-import pickle
 
 EMBED_MODEL = settings.EMBEDDING_MODEL
-INDEX_DIR = settings.FAISS_INDEX_DIR
+INDEX_DIR = Path(settings.FAISS_INDEX_DIR)
 
-# Helper: load a file and return list[str] raw texts
-def load_file_to_texts(path: Path) -> List[Dict]:
+# Helper: load a file and return list[Document]
+def load_file_to_texts(path: Path) -> List[Document]:
     path = Path(path)
     ext = path.suffix.lower()
     if ext in [".txt", ".md"]:
@@ -25,20 +24,32 @@ def load_file_to_texts(path: Path) -> List[Dict]:
     else:
         loader = TextLoader(str(path), encoding="utf-8")
     docs = loader.load()
-
     return docs
 
-def ingest_documents_from_paths(paths: List[str], namespace: str = "default"):
+def ingest_documents_from_paths(paths: List[str]):
     """
     paths: list of file paths (local)
-    namespace: optional label (used if storing multiple indexes)
+    Tất cả documents sẽ được lưu vào 1 FAISS index duy nhất
     """
+    # Load tất cả documents
     all_docs = []
     for p in paths:
-        docs = load_file_to_texts(Path(p))
-        for d in docs:
-            all_docs.append(Document(page_content=d.page_content, metadata={"source": str(p), **(d.metadata or {})}))
+        try:
+            docs = load_file_to_texts(Path(p))
+            for d in docs:
+                all_docs.append(Document(
+                    page_content=d.page_content, 
+                    metadata={"source": str(p), **(d.metadata or {})}
+                ))
+            print(f"✓ Loaded: {p}")
+        except Exception as e:
+            print(f"✗ Error loading {p}: {e}")
 
+    if not all_docs:
+        print("No documents loaded!")
+        return False
+
+    # Chunk tất cả documents
     chunked_docs = []
     for d in all_docs:
         chunks = chunk_texts([d.page_content])
@@ -47,18 +58,31 @@ def ingest_documents_from_paths(paths: List[str], namespace: str = "default"):
             md.update({"chunk": i})
             chunked_docs.append(Document(page_content=c, metadata=md))
 
+    print(f"Total chunks: {len(chunked_docs)}")
+
+    # Tạo embeddings
     embedder = HuggingFaceEmbeddings(model_name=EMBED_MODEL)
-    index_path = INDEX_DIR / f"{namespace}_faiss"
-    index_path.mkdir(parents=True, exist_ok=True)
+    
+    # Tạo thư mục nếu chưa có
+    INDEX_DIR.mkdir(parents=True, exist_ok=True)
 
-    if (index_path / "index.faiss").exists():
-        print("[yellow]Loading existing FAISS and adding documents...[/yellow]")
-        vectordb = FAISS.load_local(str(index_path), embedder)
+    # Kiểm tra nếu đã có index cũ
+    if (INDEX_DIR / "index.faiss").exists():
+        print("Loading existing FAISS index and adding new documents...")
+        vectordb = FAISS.load_local(
+            str(INDEX_DIR), 
+            embedder,
+            allow_dangerous_deserialization=True
+        )
         vectordb.add_documents(chunked_docs)
+        print(f"✓ Added {len(chunked_docs)} chunks to existing index")
     else:
-        print("[green]Creating new FAISS index...[/green]")
-        vectordb = FAISS.from_documents(chunked_docs, embedder, index_path=str(index_path))
+        print("Creating new FAISS index...")
+        vectordb = FAISS.from_documents(chunked_docs, embedder)
+        print(f"✓ Created new index with {len(chunked_docs)} chunks")
 
-    # Also persist metadata mapping if needed (FAISS wrapper handles metadata in LangChain)
-    print(f"[green]Ingested {len(chunked_docs)} chunks into FAISS at {index_path}[/green]")
+    # Lưu index
+    vectordb.save_local(str(INDEX_DIR))
+    print(f"✓ FAISS index saved to: {INDEX_DIR}")
+    
     return True

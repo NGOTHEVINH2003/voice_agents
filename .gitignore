@@ -1,6 +1,8 @@
 node_modules/
 .next/
 package-lock.json
+data/
+data/processed/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
