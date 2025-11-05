@@ -18,7 +18,7 @@ async def upload_files(files: List[UploadFile] = File(...), namespace: str = For
             out.write(content)
         saved_paths.append(str(dest))
     # call ingestion pipeline
-    ingest_documents_from_paths(saved_paths, namespace=namespace)
+    ingest_documents_from_paths(saved_paths)
     return {"status": "ok", "ingested_files": [p for p in saved_paths], "namespace": namespace}
 
 @router.post("/from_folder/")
