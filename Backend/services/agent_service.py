@@ -61,21 +61,21 @@ class LangChainAgent:
             Do NOT use this tool for scheduling or calendar questions."""
             return await self._perform_rag_query(query)
         
-        @tool
-        def get_current_datetime() -> str:
-            """Returns the current date and time in Vietnam timezone.
-            ALWAYS use this tool first when:
-            - User mentions relative dates like 'today', 'tomorrow', 'next week', 'next month'
-            - Creating or searching for calendar events
-            - Any time calculation is needed
-            This ensures you have accurate current time for all operations."""
-            now = datetime.now()
-            return (f"Current date and time: {now.strftime('%Y-%m-%d %H:%M:%S')} "
-                   f"({now.strftime('%A, %B %d, %Y')})")
+        # @tool
+        # def get_current_datetime() -> str:
+        #     """Returns the current date and time in Vietnam timezone.
+        #     ALWAYS use this tool first when:
+        #     - User mentions relative dates like 'today', 'tomorrow', 'next week', 'next month'
+        #     - Creating or searching for calendar events
+        #     - Any time calculation is needed
+        #     This ensures you have accurate current time for all operations."""
+        #     now = datetime.now()
+        #     return (f"Current date and time: {now.strftime('%Y-%m-%d %H:%M:%S')} "
+        #            f"({now.strftime('%A, %B %d, %Y')})")
         
         calendar_tools = get_calendar_tools(service_instance=calendar_service)
 
-        self.tools = [perform_rag_tool, get_current_datetime] + calendar_tools
+        self.tools = [perform_rag_tool] + calendar_tools
 
         # Lấy thời gian hiện tại cho system prompt
         now = datetime.now()
@@ -86,29 +86,21 @@ class LangChainAgent:
 
         prompt = f"""You are a helpful AI assistant with calendar management capabilities.
 
-**IMPORTANT - CURRENT DATE AND TIME INFORMATION:**
-- Current DateTime: {current_datetime} ({current_day})
-- Today's date: {today_date}
-- Tomorrow's date: {tomorrow_date}
-
-**CRITICAL: You MUST use the 'get_current_datetime' tool at the start of ANY conversation involving dates, times, or scheduling to get the most accurate current time.**
+**CRITICAL: You will be provided with the current date and time in the context for EVERY turn. You MUST use this information to resolve all relative dates.**
 
 You have access to the following tools:
-1. 'get_current_datetime' — Get current date and time (USE THIS FIRST for any date-related queries)
-2. 'perform_rag_tool' — Search the internal knowledge base (RAG)
-3. 'GoogleCalendar' tools — List, create, and delete calendar events
+1. 'perform_rag_tool' — Search the internal knowledge base (RAG)
+2. 'GoogleCalendar' tools — List, create, update, and delete calendar events
 
 **Behavior Rules:**
 
 1. **Date Handling (MOST IMPORTANT):**
-   - ALWAYS call 'get_current_datetime' tool FIRST when user mentions any relative date
-   - Calculate dates based on the current datetime from the tool
+   - ALWAYS use the 'current_datetime' provided in the system context to resolve dates.
    - When user says:
-     * 'today' → use current date from tool
-     * 'tomorrow' → add 1 day to current date
-     * 'next week' → add 7 days to current date  
-     * 'next Monday' → find next occurrence of Monday
-     * 'next month' → add 1 month to current date
+     * 'today' → use the current date
+     * 'tomorrow' → add 1 day to the current date
+     * 'next week' → add 7 days to the current date
+     * 'next Monday' → find the next occurrence of Monday after the current date
 
 2. **Calendar Event Creation:**
    - If user doesn't specify end time: set to 1 hour after start time
@@ -122,19 +114,20 @@ You have access to the following tools:
 
 4. **Tool Selection:**
    - General questions → use 'perform_rag_tool'
-   - Calendar/scheduling questions → use 'get_current_datetime' then 'GoogleCalendar' tools
+   - Calendar/scheduling questions → use 'GoogleCalendar' tools
 
 **Example workflow for "schedule meeting tomorrow at 2pm":**
-1. Call get_current_datetime() → get "2025-11-04"
-2. Calculate tomorrow → "2025-11-05"  
-3. Create event for 2025-11-05 14:00:00 to 2025-11-05 15:00:00
-4. Confirm: "I've scheduled your meeting for tomorrow, November 5th at 2:00 PM"
+1. System provides current time, e.g., "2025-11-05 16:20:00".
+2. You calculate tomorrow → "2025-11-06".
+3. You call create_calendar_event for 2025-11-06 14:00:00.
+4. You confirm: "I've scheduled your meeting for tomorrow, November 6th at 2:00 PM"
 
 Your goal is to be a smart, accurate scheduling assistant who never hallucinates dates."""
 
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", prompt),
             MessagesPlaceholder(variable_name="chat_history"),
+            ("system", "CONTEXT: Current Date/Time is {current_datetime}"),
             ("user", "{input}"),
             MessagesPlaceholder(variable_name="agent_scratchpad")
         ])
@@ -192,14 +185,15 @@ Your goal is to be a smart, accurate scheduling assistant who never hallucinates
         try:
             config = {"configurable": {"session_id": session_id}}
             
-            enhanced_input = f"[System Context: Current DateTime is {current_datetime}]\n{text}"
-            
             response = await self.chain_with_history.ainvoke(
-                {"input": enhanced_input},
+                {
+                    "input": text,
+                    "current_datetime": current_datetime
+                },
                 config=config
             )
             
-            output_text = response.get('output', 'Agent không trả về phản hồi.')
+            output_text = response.get('output', 'Agent does not return a response.')
             print(f"Agent response: {output_text}")
             return output_text
 

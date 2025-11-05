@@ -7,18 +7,16 @@ from googleapiclient.discovery import build, Resource
 from langchain_core.tools import tool
 from typing import List, Optional
 
-# Đặt múi giờ (RẤT QUAN TRỌNG cho lịch)
 try:
-    # Thử lấy từ config nếu có
     from Backend.config import settings
     LOCAL_TIMEZONE = pytz.timezone(settings.TIMEZONE)
 except Exception:
-    print("Cảnh báo: Không tìm thấy TIMEZONE trong config, dùng 'Asia/Ho_Chi_Minh' làm dự phòng.")
+    print("Warning: TIMEZONE NOT FOUND IN config, USING 'Asia/Ho_Chi_Minh' AS BACKUP.")
     LOCAL_TIMEZONE = pytz.timezone('Asia/Ho_Chi_Minh') 
 
 class GoogleCalendarService:
     """
-    Dịch vụ để tương tác với Google Calendar API sử dụng Service Account.
+    Service for interacting with google calendar api using google serivce account.
     """
     def __init__(self, service_account_file: str, calendar_id: str):
         try:
@@ -30,22 +28,34 @@ class GoogleCalendarService:
             self.calendar_id = calendar_id
             print("GoogleCalendarService initialized successfully.")
         except Exception as e:
-            print(f"LỖI: Không thể khởi tạo GoogleCalendarService: {e}")
-            print("Hãy chắc chắn tệp service account JSON là chính xác.")
+            print(f"Error: Cannot initialzied GoogleCalendarService: {e}")
+            print(" Please ensure that the service account json is correct.")
             raise
 
     def list_events(self, start_time_iso: str, end_time_iso: str) -> str:
         try:
+            start_dt = datetime.fromisoformat(start_time_iso.replace('Z', '+00:00'))
+            end_dt = datetime.fromisoformat(end_time_iso.replace('Z', '+00:00'))
+            
+
+            if start_dt.tzinfo is None:
+                start_dt = LOCAL_TIMEZONE.localize(start_dt)
+            if end_dt.tzinfo is None:
+                end_dt = LOCAL_TIMEZONE.localize(end_dt)
+            
+            start_time_with_tz = start_dt.isoformat()
+            end_time_with_tz = end_dt.isoformat()
+
             events_result = self.service.events().list(
                 calendarId=self.calendar_id,
-                timeMin=start_time_iso,
-                timeMax=end_time_iso,
+                timeMin=start_time_with_tz,
+                timeMax=end_time_with_tz,
                 singleEvents=True,
                 orderBy='startTime'
             ).execute()
             events = events_result.get('items', [])
             if not events:
-                return "Không tìm thấy sự kiện nào trong khoảng thời gian này."
+                return "No events found in this time window."
             
             event_list = []
             for event in events:
@@ -53,13 +63,13 @@ class GoogleCalendarService:
                 end = event['end'].get('dateTime', event['end'].get('date'))
                 event_list.append(
                     f"- ID: {event['id']}\n"
-                    f"  Tóm tắt: {event.get('summary', 'Không có tiêu đề')}\n"
-                    f"  Bắt đầu: {start}\n"
-                    f"  Kết thúc: {end}\n"
+                    f"  SUMMARY: {event.get('summary', 'Not title')}\n"
+                    f"  Start TIME: {start}\n"
+                    f"  END TIME: {end}\n"
                 )
             return "\n".join(event_list)
         except Exception as e:
-            return f"Lỗi khi liệt kê sự kiện: {e}"
+            return f"error when listing events: {e}"
 
     def create_event(self, summary: str, start_time_iso: str, end_time_iso: str, description: str = None) -> str:
         try:
@@ -73,9 +83,9 @@ class GoogleCalendarService:
                 calendarId=self.calendar_id,
                 body=event
             ).execute()
-            return f"Tạo sự kiện thành công. ID sự kiện: {created_event['id']}"
+            return f"Successfully create events. Event ID: {created_event['id']}"
         except Exception as e:
-            return f"Lỗi khi tạo sự kiện: {e}"
+            return f"Errors occur when create event: {e}"
 
     def update_event(self, event_id: str, new_summary: str = None, new_start_time_iso: str = None, new_end_time_iso: str = None) -> str:
         try:
@@ -93,9 +103,9 @@ class GoogleCalendarService:
                 eventId=event_id,
                 body=event
             ).execute()
-            return f"Cập nhật sự kiện '{updated_event.get('summary')}' thành công."
+            return f"Update Event '{updated_event.get('summary')}' Successfully."
         except Exception as e:
-            return f"Lỗi khi cập nhật sự kiện: {e}"
+            return f"Error when Update Event: {e}"
 
     def delete_event(self, event_id: str) -> str:
         try:
@@ -103,25 +113,19 @@ class GoogleCalendarService:
                 calendarId=self.calendar_id,
                 eventId=event_id
             ).execute()
-            return f"Xóa sự kiện (ID: {event_id}) thành công."
+            return f"Delete Event (ID: {event_id}) Successfully."
         except Exception as e:
-            return f"Lỗi khi xóa sự kiện: {e}"
+            return f"Error when Delete Event: {e}"
 
 
 
 def get_calendar_tools(service_instance: GoogleCalendarService) -> List[tool]:
-    """
-    Gắn các hàm tool (đã có docstring) với các phương thức (logic)
-    thực tế của instance 'GoogleCalendarService'.
-    """
-
-    # Định nghĩa các tool ngay tại đây.
-    # Chúng sẽ "thấy" service_instance thông qua closure.
-    
+   
     @tool
     def list_calendar_events(start_time_iso: str, end_time_iso: str) -> str:
         """
-        Lists all calendar events between a specific start and end time. if time is not specify automatically understand it from  0 am - 12pm
+        Lists all calendar events between a specific start and end time. if start time and end time is not specify automatically understand it from  0 am - 12pm
+        if user only list start time you can search with end time is one hour duration. 
         Use this to check for existing meetings or find free time.
         Args:
             start_time_iso (str): The start time in ISO 8601 format (e.g., '2025-11-05T10:00:00+07:00').
@@ -184,7 +188,6 @@ def get_calendar_tools(service_instance: GoogleCalendarService) -> List[tool]:
         """
         return service_instance.delete_event(event_id)
     
-    # Trả về các tool đã được cập nhật
     return [
         list_calendar_events,
         create_calendar_event,

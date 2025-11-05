@@ -9,7 +9,7 @@ load_dotenv()
 class Settings():
     #RAG CONFIG
     GOOGLE_API_KEY = os.getenv("GOOGLE_API_TOKEN")
-    LLM_MODEL = os.getenv("LLM_MODEL", "gemini-2.0-flash-exp")
+    LLM_MODEL = os.getenv("LLM_MODEL", "gemini-2.5-flash")
     EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-base-en-v1.5")
     FAISS_INDEX_DIR = Path(os.getenv("FAISS_INDEX_DIR", "Backend/data/processed/"))
     CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", 1000))
